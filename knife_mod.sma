@@ -46,7 +46,7 @@ public plugin_init() {
 
 	CVAR_LOWGRAV = register_cvar("km_lowgravity" , "400")
 	CVAR_NORMGRAV = get_cvar_pointer("sv_gravity")
-	CVAR_HEALTHREGEN = register_cvar("km_healthregen", "5");
+	CVAR_HEALTHREGEN = register_cvar("km_healthregen", "10");
 
 	g_VipCallback = menu_makecallback("vip_callback");
 	g_PremiumCallback = menu_makecallback("premium_callback");
@@ -202,7 +202,7 @@ public SetRegen(id, Weapon){
 	if(task_exists(TASK_REGEN_ID + id)) remove_task(TASK_REGEN_ID + id);
 	if(knife_model[id] != 2 || Weapon != CSW_KNIFE) return;
 
-	set_task(1.0, "RegenHealth", TASK_REGEN_ID + id, _, _, "b");
+	set_task(2.0, "RegenHealth", TASK_REGEN_ID + id, _, _, "b");
 }
 
 public RegenHealth(task_id){
@@ -299,8 +299,8 @@ stock fade_green(id, ammount)
     write_short(0)        //Hold
     write_short(0)        //Type
     write_byte(0)    //R
-    write_byte(0)    //G
-    write_byte(200)    //B
+    write_byte(200)    //G
+    write_byte(0)    //B
     write_byte(ammount)    //B
     message_end()
 } 
