@@ -1,5 +1,6 @@
 #include <amxmodx>
 #include <amxmisc>
+#include <hamsandwich>
 #include <engine> 
 #include <nvault>
 #include <fun>
@@ -14,21 +15,25 @@ native isPlayerVip(id);
 #define VERSION "1.0" 
 #define AUTHOR "MrShark45"
 
-#define TASK_INTERVAL 4.0  
+#define TASK_REGEN_ID 9321
+
 #define MAX_HEALTH 255  
 
 #define PREMIUM_KNIFEID 256
 
-new knife_model[33] 
-new knife_speed[33]
+new knife_model[33];
+new knife_speed[33];
 
-new CVAR_LOWGRAV
-new CVAR_NORMGRAV
+new CVAR_LOWGRAV;
+new CVAR_NORMGRAV;
+new CVAR_HEALTHREGEN;
 
 new g_iVault;
 
 new g_VipCallback;
 new g_PremiumCallback;
+
+new g_msgFadeScreen;
 
 public plugin_init() { 
 	
@@ -41,9 +46,14 @@ public plugin_init() {
 
 	CVAR_LOWGRAV = register_cvar("km_lowgravity" , "400")
 	CVAR_NORMGRAV = get_cvar_pointer("sv_gravity")
+	CVAR_HEALTHREGEN = register_cvar("km_healthregen", "5");
 
 	g_VipCallback = menu_makecallback("vip_callback");
 	g_PremiumCallback = menu_makecallback("premium_callback");
+
+	RegisterHam(Ham_TakeDamage, "player", "hook_take_damage");
+
+	g_msgFadeScreen = get_user_msgid("ScreenFade");
 
 	g_iVault = nvault_open("KMOD");
 }
@@ -63,13 +73,17 @@ public plugin_precache() {
 	precache_model("models/llg/p_knife.mdl")
 } 
 
+public client_disconnected(id){
+	if(task_exists(TASK_REGEN_ID + id)) remove_task(TASK_REGEN_ID + id);
+}
+
 public display_knife(id) {
 	new menu = menu_create( "\rKnife Mod", "menu_handler" );
 
 	menu_additem( menu, "\wDefault Knife \r(Default Knife)", "", 0 );
 	menu_additem( menu, "\wButcher Knife \r(Low Gravity)", "", 0 );
-	menu_additem( menu, "\wVip Knife \r(400 Start Speed)", "", 0, g_VipCallback);
-	menu_additem( menu, "\yPremium Knife \r(500 Start Speed)", "", 0, g_PremiumCallback);
+	menu_additem( menu, "\wVip Knife \r(400 Start Speed | \yHealth Regen\r)", "", 0, g_VipCallback);
+	menu_additem( menu, "\yPremium Knife \r(500 Start Speed | \yx2 Damage\r)", "", 0, g_PremiumCallback);
    
 	menu_setprop( menu, MPROP_EXIT, MEXIT_ALL );
 
@@ -91,6 +105,16 @@ public premium_callback( id, menu, item )
 	else
 		return ITEM_DISABLED;
 }
+
+public hook_take_damage(id, inflictor, attacker, Float:damage, damagebits)
+{
+	if(!is_user_connected(attacker)) return HAM_IGNORED;
+	if(get_user_weapon(attacker) != CSW_KNIFE || knife_model[attacker] != 3) return HAM_IGNORED;
+
+	damage *= 2;
+	SetHamParamFloat(4, damage);
+	return HAM_HANDLED;
+} 
 
 public menu_handler(id, menu, item) {
 	if ( item == MENU_EXIT )
@@ -174,11 +198,38 @@ public Float:GetSpeed(id){
 	return 250.0;
 }
 
+public SetRegen(id, Weapon){
+	if(task_exists(TASK_REGEN_ID + id)) remove_task(TASK_REGEN_ID + id);
+	if(knife_model[id] != 2 || Weapon != CSW_KNIFE) return;
+
+	set_task(1.0, "RegenHealth", TASK_REGEN_ID + id, _, _, "b");
+}
+
+public RegenHealth(task_id){
+	new id = task_id - TASK_REGEN_ID;
+
+	if(!is_user_alive(id)) return;
+
+	new health = get_user_health(id);
+	new regen_value = get_pcvar_num(CVAR_HEALTHREGEN);
+
+	if(health >= 200) return;
+
+	health = clamp(health + regen_value, 1, 200);
+
+	set_user_health(id, health);
+
+	fade_green(id, 100);
+}
+
 public CurWeapon(id){
 	new Weapon = read_data(2)
 	
 	// Set Knife Model
 	SetKnife(id, knife_model[id])
+
+	// Regen Ability
+	SetRegen(id, Weapon)
 	
 	// Task Options
 
@@ -234,4 +285,22 @@ LoadData(id)
 	format(vaultkey, 63, "KMOD2_%s", szName)
 	nvault_get(g_iVault, vaultkey, vaultdata, 63)
 	knife_speed[id] = str_to_num(vaultdata)
+} 
+
+
+stock fade_green(id, ammount)
+{    
+    //FADE OUT FROM GREEN
+    if (ammount > 255)
+    ammount = 255
+    
+    message_begin(MSG_ONE_UNRELIABLE, g_msgFadeScreen, {0,0,0}, id)
+    write_short(ammount * 100)    //Durration
+    write_short(0)        //Hold
+    write_short(0)        //Type
+    write_byte(0)    //R
+    write_byte(0)    //G
+    write_byte(200)    //B
+    write_byte(ammount)    //B
+    message_end()
 } 
